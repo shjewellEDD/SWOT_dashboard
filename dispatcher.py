@@ -1,9 +1,9 @@
 
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from test_dashboard import server as test
-import landing_page
+from landing_page import server as landing
 
 
-app = DispatcherMiddleware(landing_page, {
+app = DispatcherMiddleware(landing, {
     '/prawler/test': test,
 })
