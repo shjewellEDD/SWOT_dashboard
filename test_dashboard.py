@@ -280,7 +280,7 @@ graph_card = dbc.Card(
 
 app = dash.Dash(__name__,
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
-                requests_pathname_prefix='/prawler/m200/',
+                requests_pathname_prefix='/prawler/test/',
                 external_stylesheets=[dbc.themes.SLATE])
 server = app.server
 

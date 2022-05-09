@@ -30,7 +30,7 @@ prawlers = [{'label': 'M200', 'value': 'M200'},
 #             }
 
 
-gps_coords = {'M200': {'type': 'prawler', 'link': '[M200](/prawler/m200/)', 'lat': 58,   'lon': -165}
+gps_coords = {'M200': {'type': 'prawler', 'link': '[M200](/prawler/test/)', 'lat': 58,   'lon': -165}
               }
 
 df = pd.DataFrame(gps_coords).transpose()
