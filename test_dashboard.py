@@ -1,5 +1,6 @@
 '''
 TODO:
+    Use data_import instead of built in
     Improvement:
         Color:
             Add color to SB depth
@@ -22,20 +23,12 @@ import plotly.express as px
 # import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 
-#non-plotly imports
 import pandas as pd
-# from lxml import html
 import datetime
-# from datetime import date
 import requests
-# import io
-# import urllib
 
 prawlers = [{'label':   'M200 Eng', 'value': 'M200Eng'},
-            {'label':   'M200 Sci', 'value': 'M200Sci'},
-            {'label':   'M200 Wind', 'value': 'M200Wind'},
-            {'label':   'M200 Temp/Humid', 'value': 'M200ATRH'},
-            {'label':   'M200 Baro', 'value': 'M200Baro'}
+            {'label':   'M200 Sci', 'value': 'M200Sci'}
             ]
 
 
@@ -194,10 +187,7 @@ Start Dashboard
 
 dataset_dict = {
             'M200Eng': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_PRAWE_M200.csv'),
-            'M200Sci': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_PRAWC_M200.csv'),
-            'M200Wind': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_WIND.csv'),
-            'M200Baro': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_BARO.csv'),
-            'M200ATRH': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_ATRH.csv')
+            'M200Sci': Dataset('https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_PRAWC_M200.csv')
             }
 
 
@@ -392,7 +382,11 @@ def plot_evar(dataset, select_var, start_date, end_date):
     #elif select_var in list(new_data.columns):
 
     else:
-        efig = px.scatter(new_data, y=select_var, x='time')#, color="sepal_length", color_continuous_scale=colorscale)
+        if dataset == 'M200Sci':
+            efig = px.scatter(new_data, y=select_var,
+                             x='time', color=select_var)
+        else:
+            efig = px.scatter(new_data, y=select_var, x='time')#, color="sepal_length", color_continuous_scale=colorscale)
 
         columns = [{"name": 'Date', "id": 'datetime'},
                    {'name': select_var, 'id': select_var}]
