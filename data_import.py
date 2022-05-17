@@ -3,6 +3,9 @@ ERDDAP reader archetype file.
 
 TODO:
     Need exception handler for bad urls
+    Do we need the Prawler specific functions, or should those be offloaded
+        Prawer specific fuctions should have date guards added
+    Maybe make ret_data invoke get_date if self.data is empty?
 
 '''
 
@@ -28,6 +31,7 @@ def gen_erddap_date(edate):
 
 # generates datetime.datetime object from ERDDAP compatable date
 def from_erddap_date(edate):
+
     if pd.isna(edate):
         return edate
 
@@ -50,12 +54,12 @@ def from_erddap_date(edate):
 
     return redate
 
-
 def erddap_url_date(in_date):
     # generates a url selection date for ERDDAP
     # in the event a datetime.date is passed, it will return midnight (00:00:00) of the date
 
     if isinstance(in_date, str):
+
         in_date = from_erddap_date(in_date)
 
     str_date = f'{in_date.year}-{in_date.month}-{in_date.day}'
@@ -68,11 +72,11 @@ def erddap_url_date(in_date):
     return str_date
 
 
+
 ''' 
 class used for holding useful information about the ERDDAP databases
 ========================================================================================================================
 '''
-
 
 class Dataset:
     '''
@@ -83,7 +87,7 @@ class Dataset:
     '''
 
     def __init__(self, url, window_start=False, window_end=False):
-        # self.url = self.url_check(url)
+        #self.url = self.url_check(url)
         self.url = url
         self.raw_vars = self.get_raw_vars()
         self.data = pd.DataFrame()
@@ -108,11 +112,25 @@ class Dataset:
             else:
                 self.t_end = self.data_end()
 
+
+    def date_guard(self, in_date):
+        '''
+        Our datasets love to send us data from the future. Let's stop that, okay?
+        :param in_date:
+        :return: datetime.datetime
+        '''
+
+        if in_date > datetime.datetime.today():
+
+            return datetime.datetime.today()
+
+        return in_date
+
     # def url_check(self, try_url):
     #
     #     page = (requests.get(try_url[:-3] + "das"))
 
-    # reads variables from .das file
+    #reads variables from .das file
     def get_raw_vars(self):
         '''
         get_vars:
@@ -130,11 +148,14 @@ class Dataset:
             if len(item) - len(item.lstrip(' ')) == 2:
 
                 if len(item[2:-2]) > 1:
+
                     self.raw_vars.append(item[2:-2])
+
 
         return self.raw_vars
 
-    # opens metadata page and returns start and end datestamps
+
+    #opens metadata page and returns start and end datestamps
     def data_start(self):
         '''
         Let's try using the NC_GLOBAL time_coverage variable, maybe that will be more reliable than the machine
@@ -146,9 +167,10 @@ class Dataset:
 
         line = page.find('time_coverage_start')
         indx = page.find('"', line)
-        endx = page.find('"', indx + 1)
+        endx = page.find('"', indx+1)
 
-        return from_erddap_date(page[indx + 1:endx - 1])
+        return from_erddap_date(page[indx+1:endx-1])
+
 
     def data_end(self):
 
@@ -162,16 +184,17 @@ class Dataset:
 
         line = page.find('time_coverage_end')
         indx = page.find('"', line)
-        endx = page.find('"', indx + 1)
+        endx = page.find('"', indx+1)
 
-        return from_erddap_date(page[indx + 1:endx - 1])
+        return self.date_guard(from_erddap_date(page[indx+1:endx-1]))
+
 
     def get_data(self, **kwargs):
         # IDEA:
         # Make both add and exclude variables options with kwargs
         #
-        # https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_PRAWE_M200.csv?time%2Clatitude&time%3E=2022-04-03T00%3A00%3A00Z&time%3C=2022-04-10T14%3A59%3A14Z
-        # [url base] + '.csv?time%2C'+ [var1] + '%2C' + [var2] + '%2C' + .... + [time1] + '%3C' + [time2]
+        #https://data.pmel.noaa.gov/engineering/erddap/tabledap/TELOM200_PRAWE_M200.csv?time%2Clatitude&time%3E=2022-04-03T00%3A00%3A00Z&time%3C=2022-04-10T14%3A59%3A14Z
+        #[url base] + '.csv?time%2C'+ [var1] + '%2C' + [var2] + '%2C' + .... + [time1] + '%3C' + [time2]
         variables = kwargs.get('variables', None)
 
         self.t_start = kwargs.get('window_start', self.t_start)
@@ -181,6 +204,7 @@ class Dataset:
             self.window_flag = True
 
         if variables == [] or variables is None:
+
             self.data = pd.read_csv(self.url, skiprows=[1], low_memory=False)
 
             return self.data
@@ -192,7 +216,7 @@ class Dataset:
 
         if self.time_flag:
             spec_url = f'{spec_url}?time'
-            # spec_url = f'{spec_url}?'
+            #spec_url = f'{spec_url}?'
 
             for var in vars:
                 if var is None:
@@ -223,6 +247,7 @@ class Dataset:
 
         return self.data
 
+
     def ret_data(self, **kwargs):
         '''
         Returns data and applies time window. The time window may not be necessary with new fncs
@@ -232,7 +257,7 @@ class Dataset:
         if self.time_flag:
 
             w_start = kwargs.get('t_start', self.t_start)
-            w_end = kwargs.get('t_end', self.t_end)
+            w_end = self.date_guard(kwargs.get('t_end', self.t_end))
 
             return self.data[(w_start <= self.data['time']) & (self.data['time'] <= w_end)]
 
@@ -240,7 +265,8 @@ class Dataset:
 
             return self.data
 
-    # converts our basic variable list into Dash compatible dict thingy
+
+    #converts our basic variable list into Dash compatible dict thingy
     def gen_drop_vars(self, **kwargs):
         '''
         kwargs:
@@ -263,6 +289,104 @@ class Dataset:
 
         return vars
 
-    def ret_vars(self):
+
+    def ret_raw_vars(self):
+        '''
+        Returns variables with none skipped
+        :return: list
+        '''
 
         return self.raw_vars
+
+    def ret_vars(self, **kwargs):
+        '''
+        Return
+        :param kwargs: keyword: skips, list of strs, variables to skip
+        :return:
+        '''
+
+        skips = ['time', 'latitude', 'longitude', 'timeseries_id']
+
+        external_skips = kwargs.get('skips', None)
+
+        if external_skips:
+
+            skips = skips + external_skips
+
+        vars = []
+
+        for var in list(self.raw_vars):
+
+            # skip unwanted variables
+            if var in skips:
+                continue
+
+            vars.append(var)
+
+        return vars
+
+    def trips_per_day(self, w_start, w_end):
+        '''
+        Prawler specific function, calculates round trips per day
+        :param w_start:
+        :param w_end:
+        :return:
+        '''
+
+        internal_set =self.data[(w_start <= self.data['datetime']) & (self.data['datetime'] <= w_end)]
+        #internal_set['datetime'] = internal_set.loc[:, 'time'].apply(from_erddap_date)
+        internal_set['days'] = internal_set.loc[:, 'datetime'].dt.date
+        new_df = pd.DataFrame((internal_set.groupby('days')['ntrips'].last()).diff())[1:]
+        new_df['days'] = new_df.index
+
+        return new_df
+
+    def errs_per_day(self, w_start, w_end):
+        '''
+        Pralwer specific function
+        Calculates errors per day
+        :param w_start:
+        :param w_end:
+        :return:
+        '''
+
+        internal_set = self.data[(w_start <= self.data['datetime']) & (self.data['datetime'] <= w_end)]
+        # internal_set['datetime'] = internal_set.loc[:, 'time'].apply(from_erddap_date)
+        internal_set['days'] = internal_set.loc[:, 'datetime'].dt.date
+        new_df = pd.DataFrame((internal_set.groupby('days')['nerrors'].last()).diff())[1:]
+        new_df['days'] = new_df.index
+
+        return new_df
+
+    def gen_fail_set(self):
+        '''
+        Prawler specific function
+        Returns fails
+        :return:
+        '''
+
+        fail_set = self.data[self.data['dir'] == 'F']
+        # fail_set['datetime'] = fail_set.loc[:, 'time'].apply(from_erddap_date)
+        fail_set['days'] = fail_set.loc[:, 'datetime'].dt.date
+        fail_set = pd.DataFrame((fail_set.groupby('days')['dir'].last()).diff())[1:]
+        fail_set['days'] = fail_set.index
+
+        return fail_set
+
+    def sci_profiles_per_day(self, w_start, w_end):
+        '''
+        Prawler specific function, returns the number of scientific profiles per day
+        :param w_start:
+        :param w_end:
+        :return:
+        '''
+
+        sci_set = self.data[self.data.loc[:, 'sb_depth'].diff() < -35]
+        sci_set['ntrips'] = sci_set['sb_depth'].diff()
+
+        # sci_set['datetime'] = sci_set.loc[:, 'time'].apply(from_erddap_date)
+        sci_set['days'] = sci_set.loc[:, 'datetime'].dt.date
+        sci_set = pd.DataFrame((sci_set.groupby('days')['ntrips'].size()))
+        sci_set['days'] = sci_set.index
+
+        return sci_set
