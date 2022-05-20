@@ -10,14 +10,15 @@ TODO:
             Just drop?
             Linearly interpolate?
     Bugs:
-        TELONAS2 GEN data ends in 4/21, but dateselector doesn't update to reflect this
+        Should clear overlay variable, if set is cleared too
+
 
 '''
 
 import dash
 from dash import html as dhtml
 from dash import dcc, dash_table
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.express as px
 # import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
@@ -25,6 +26,7 @@ import dash_bootstrap_components as dbc
 #non-plotly imports
 import data_import
 import datetime
+import pandas as pd
 
 prawlers = [{'label':   'M200 Eng', 'value': 'M200Eng'},
             {'label':   'M200 Sci', 'value': 'M200Sci'}
@@ -50,7 +52,7 @@ colors = {'background': '#111111', 'text': '#7FDBFF'}
 
 app = dash.Dash(__name__,
                 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
-                requests_pathname_prefix='/swot/test/',
+                 requests_pathname_prefix='/swot/test/',
                 external_stylesheets=[dbc.themes.SLATE])
 server = app.server
 
@@ -58,24 +60,38 @@ external_stylesheets = ['https://codepen.io./chriddyp/pen/bWLwgP.css']
 
 set_card = dbc.Card([
         dbc.CardBody(
-            dcc.Dropdown(
-                id="select_eng",
-                options=prawlers,
-                value=prawlers[0]['value'],
-                clearable=False
-            )
+            children=[
+                dhtml.H5('Plot'),
+                dcc.Dropdown(
+                    id="select_eng",
+                    options=prawlers,
+                    value=prawlers[0]['value'],
+                    clearable=False
+                ),
+                dcc.Dropdown(
+                    id="select_var",
+                    clearable=False
+                )
+            ]
         )
 ])
 
-variables_card = dbc.Card(
-    [
-     dbc.CardBody(
-         dcc.Dropdown(
-             id="select_var",
-             clearable=False
-         ),
-    )],
-)
+overlay_card = dbc.Card([
+        dbc.CardBody(
+            children=[
+                dhtml.H5('Overlay'),
+                dcc.Dropdown(
+                    id="overlay_prawler",
+                    options=prawlers,
+                    clearable=True
+                ),
+                dcc.Dropdown(
+                    id="overlay_var",
+                    clearable=True
+                )
+            ]
+        )
+])
 
 date_card = dbc.Card([
     dbc.CardBody(
@@ -119,7 +135,7 @@ app.layout = dhtml.Div([
                 dbc.Col(graph_card, width=9),
                 dbc.Col(children=[date_card,
                                   set_card,
-                                  variables_card,
+                                  overlay_card,
                                   table_card],
                         width=3)
                     ])
@@ -154,6 +170,23 @@ def change_prawler(dataset):
 
     return eng_set.ret_vars(), min_date_allowed, max_date_allowed, start_date, end_date, first_var
 
+
+#overlay selection
+@app.callback(
+    Output('overlay_var', 'options'),
+    Input('overlay_prawler', 'value')
+)
+
+def overlay_vars(prawl):
+
+    if not prawl:
+
+        return []
+
+    dset = data_import.Dataset(dataset_dict[prawl])
+
+    return dset.ret_vars()
+
 #engineering data selection
 @app.callback(
     [Output('graph', 'figure'),
@@ -162,13 +195,30 @@ def change_prawler(dataset):
      Output('t_mean', 'value')],
     [Input('select_eng', 'value'),
      Input('select_var', 'value'),
+     Input('overlay_var', 'value'),
      Input('date-picker', 'start_date'),
-     Input('date-picker', 'end_date')])
+     Input('date-picker', 'end_date')],
+    State('overlay_prawler', 'value'))
 
-def plot_evar(dataset, select_var, start_date, end_date):
+
+def plot_evar(dataset, select_var, ovr_var, start_date, end_date, ovr_prawl):
 
     eng_set = data_import.Dataset(dataset_dict[dataset])
-    new_data = eng_set.get_data(window_start=start_date, window_end=end_date)
+    new_data = eng_set.get_data(window_start=start_date, window_end=end_date, variables=[select_var])
+
+    #changed_id = [p['prop_id'] for p in dash.callback_context.triggered][0]
+    if ovr_var:
+
+        ovr_set = data_import.Dataset(dataset_dict[ovr_prawl])
+        ovr_data = ovr_set.get_data(window_start=start_date, window_end=end_date, variables=[ovr_var])
+
+        ovr_data.index = ovr_data['time']
+        new_data.index = new_data['time']
+
+        ovr_data = pd.concat(map(lambda c: ovr_data[c].dropna().reindex(new_data['time'], method='nearest'),
+                                 ovr_data.columns), axis=1)
+
+
 
     colorscale = px.colors.sequential.Viridis
 
@@ -219,12 +269,13 @@ def plot_evar(dataset, select_var, start_date, end_date):
     #elif select_var in list(new_data.columns):
 
     else:
-        # give depth a seperate colorscale
-        if dataset == 'M200Sci':
-            efig = px.scatter(new_data, y=select_var,
-                              x='time', color="sepal_length", color_continuous_scale=colorscale)
+        if ovr_var:
+
+            efig = px.scatter(y=new_data[select_var], x=new_data['time'], color=ovr_data[ovr_var], color_continuous_scale=colorscale)
+            efig.layout['coloraxis']['colorbar']['title']['text'] = ovr_var
+
         else:
-            efig = px.scatter(new_data, y=select_var, x='time')#, color="sepal_length", color_continuous_scale=colorscale)
+            efig = px.scatter(new_data, y=select_var, x='time')
 
         columns = [{"name": 'Date', "id": 'datetime'},
                    {'name': select_var, 'id': select_var}]
